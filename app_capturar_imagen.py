@@ -5,12 +5,17 @@ from tkinter import messagebox
 from PIL import Image, ImageTk
 import base64
 import io
+import json
+import re
+import pygame
 
 # Declarar 'cap' como global
 cap = None
 
 # URL de la cámara IP
 url = "http://192.168.1.43:4747/video"
+
+pygame.mixer.init()
 
 # Función para inicializar la captura de video
 def initialize_camera():
@@ -48,7 +53,7 @@ def capture_and_send_image():
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Describe lo que ves en la imagen , analiza si puede ser un ladron y confirmalo en una etiqueta ('si','no') , responde solo en formato json con esta estructura {descripcion='',confidencia='',esladron=''}"},
+                    {"type": "text", "text": "Describe lo que ves en la imagen , analiza si puede ser un ladron , para esto deberas considerar personas que tengan cubiero el rostro con una pasamontaña o bufanda cubriendo su boca , o que usen antifaces, o cubran parte de su rostro con alguna prenda  y confirmalo en una etiqueta ('si','no'), asi misMo cuenta la cantidad de personas y agregalo a la etiqueta , responde solo en formato json con esta estructura {descripcion='',confidencia='',esladron='',cantidadpersonas=''}"},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}}
                 ]
             }
@@ -66,9 +71,46 @@ def capture_and_send_image():
     if response.status_code == 201:
         result = response.json()
         description = result.get("choices", [{}])[0].get("message", {}).get("content", "Sin descripción")
-        messagebox.showinfo("Descripción", description)
+        
+        
+        print(description)
+
+        try:
+            # Intentar analizar el JSON de la respuesta
+            cleaned_text = description.replace("`", "")
+            cleaned_text = cleaned_text.replace("json", "")
+            cleaned_text = cleaned_text.replace("`", "")
+
+            messagebox.showinfo("Descripción limpia", cleaned_text)
+
+            # Parsear el JSON limpiado
+            result_json = json.loads(cleaned_text)
+            
+            esladron = result_json.get("esladron", "no")  # Valor por defecto: "no"
+
+            if esladron == "si":
+                print("¡Ladrón detectado!")
+                sonidoalerta()
+            else:
+                print("No hay amenaza.")
+                messagebox.showinfo("Estado", "No hay amenaza.")
+
+           
+
+        except json.JSONDecodeError:
+            print("La respuesta no es un JSON válido:", description)
+            messagebox.showerror("Error", "La respuesta de la API no es válida.")
+
     else:
         messagebox.showerror("Error", f"Error al usar la API: {response.status_code} - {response.text}")
+
+
+def sonidoalerta():
+        # Generar un pitido cargando un archivo de sonido, por ejemplo
+    pygame.mixer.Sound.play(pygame.mixer.Sound('alarma.mp3'))
+
+    # Para que no termine el programa antes de oír el sonido
+    pygame.time.delay(500)
 
 # Función para actualizar la imagen en tiempo real
 def update_frame():
